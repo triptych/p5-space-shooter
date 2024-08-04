@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Space Shooter Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+</head>
+<body>
+    <script>
+    let ship;
+    let bullets = [];
+    let enemies = [];
+    let stars = [];
+    let particles = [];
+    let score = 0;
+    let gameOver = false;
+
+    function setup() {
+      createCanvas(windowWidth, windowHeight);
+      ship = new Ship();
+      for (let i = 0; i < 100; i++) {
+        stars.push(new Star());
+      }
+    }
+
+    function draw() {
+      background(0);
+      
+      // Update and display stars
+      for (let star of stars) {
+        star.update();
+        star.display();
+      }
+      
+      if (!gameOver) {
+        ship.display();
+        
+        // Update and display bullets
+        for (let i = bullets.length - 1; i >= 0; i--) {
+          bullets[i].update();
+          bullets[i].display();
+          if (bullets[i].offscreen()) {
+            bullets.splice(i, 1);
+          }
+        }
+        
+        // Update and display enemies
+        if (random(1) < 0.02) {
+          enemies.push(createBlockyEnemy(random(width), 0));
+        }
+        
+        let hitDetected = false;
+        
+        for (let i = enemies.length - 1; i >= 0; i--) {
+          enemies[i].update();
+          enemies[i].display();
+          
+          if (enemies[i].offscreen()) {
+            enemies.splice(i, 1);
+            continue;
+          }
+          
+          // Check collision with ship
+          if (!hitDetected && enemies[i].hits(ship)) {
+            gameOver = true;
+            createExplosion(ship.x, ship.y);
+            hitDetected = true;
+            continue;
+          }
+          
+          // Check collision with bullets
+          for (let j = bullets.length - 1; j >= 0; j--) {
+            if (enemies[i] && bullets[j] && enemies[i].hits(bullets[j])) {
+              score += 10;
+              createExplosion(enemies[i].x, enemies[i].y);
+              enemies.splice(i, 1);
+              bullets.splice(j, 1);
+              break;
+            }
+          }
+        }
+        
+        // Mobile controls
+        if (touches.length > 0) {
+          let touch = touches[0];
+          ship.move(touch.x, touch.y);
+        }
+      }
+      
+      // Update and display particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update();
+        particles[i].display();
+        if (particles[i].isFinished()) {
+          particles.splice(i, 1);
+        }
+      }
+      
+      // Display score
+      fill(255);
+      textSize(24);
+      textAlign(LEFT, TOP);
+      text(`Score: ${score}`, 10, 10);
+      
+      if (gameOver) {
+        textAlign(CENTER, CENTER);
+        textSize(48);
+        text("GAME OVER", width / 2, height / 2);
+        textSize(24);
+        text("Tap or press any key to restart", width / 2, height / 2 + 50);
+      }
+    }
+
+    function keyPressed() {
+      if (!gameOver && key === ' ') {
+        bullets.push(new Bullet(ship.x, ship.y));
+      }
+      if (gameOver) {
+        restartGame();
+      }
+    }
+
+    function touchStarted() {
+      if (!gameOver) {
+        bullets.push(new Bullet(ship.x, ship.y));
+      } else {
+        restartGame();
+      }
+      return false;
+    }
+
+    function createExplosion(x, y) {
+      for (let i = 0; i < 50; i++) {
+        particles.push(new Particle(x, y));
+      }
+    }
+
+    function restartGame() {
+      ship = new Ship();
+      bullets = [];
+      enemies = [];
+      particles = [];
+      score = 0;
+      gameOver = false;
+    }
+
+    function createBlockyEnemy(x, y) {
+      let size = random(15, 30);
+      let grid = [];
+      for (let i = 0; i < 5; i++) {
+        grid[i] = [];
+        for (let j = 0; j < 5; j++) {
+          grid[i][j] = random() < 0.7;
+        }
+      }
+      return new BlockyEnemy(x, y, size, grid);
+    }
+
+    class Ship {
+      constructor() {
+        this.x = width / 2;
+        this.y = height - 50;
+      }
+      
+      display() {
+        fill(0, 255, 0);
+        triangle(this.x, this.y - 15, this.x - 10, this.y + 10, this.x + 10, this.y + 10);
+      }
+      
+      move(x, y) {
+        this.x = constrain(x, 10, width - 10);
+        this.y = constrain(y, height / 2, height - 10);
+      }
+      
+      hits(obj) {
+        return dist(this.x, this.y, obj.x, obj.y) < 20;
+      }
+    }
+
+    class Bullet {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.speed = 10;
+      }
+      
+      update() {
+        this.y -= this.speed;
+      }
+      
+      display() {
+        fill(255, 0, 0);
+        ellipse(this.x, this.y, 5, 10);
+      }
+      
+      offscreen() {
+        return this.y < 0;
+      }
+    }
+
+    class BlockyEnemy {
+      constructor(x, y, size, grid) {
+        this.x = x;
+        this.y = y;
+        this.size = size;
+        this.grid = grid;
+        this.speed = random(1, 3);
+      }
+      
+      update() {
+        this.y += this.speed;
+      }
+      
+      display() {
+        fill(255, 0, 255);
+        for (let i = 0; i < 5; i++) {
+          for (let j = 0; j < 5; j++) {
+            if (this.grid[i][j]) {
+              rect(this.x + i * this.size / 5, this.y + j * this.size / 5, this.size / 5, this.size / 5);
+            }
+          }
+        }
+      }
+      
+      offscreen() {
+        return this.y > height;
+      }
+      
+      hits(obj) {
+        return dist(this.x + this.size / 2, this.y + this.size / 2, obj.x, obj.y) < this.size / 2;
+      }
+    }
+
+    class Star {
+      constructor() {
+        this.x = random(width);
+        this.y = random(height);
+        this.size = random(1, 3);
+        this.speed = random(0.5, 2);
+        this.color = color(random(150, 255), random(150, 255), random(150, 255));
+      }
+      
+      update() {
+        this.y += this.speed;
+        if (this.y > height) {
+          this.y = 0;
+          this.x = random(width);
+        }
+      }
+      
+      display() {
+        fill(this.color);
+        noStroke();
+        ellipse(this.x, this.y, this.size);
+      }
+    }
+
+    class Particle {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.vx = random(-2, 2);
+        this.vy = random(-2, 2);
+        this.alpha = 255;
+      }
+      
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.alpha -= 5;
+      }
+      
+      display() {
+        noStroke();
+        fill(255, this.alpha);
+        ellipse(this.x, this.y, 5);
+      }
+      
+      isFinished() {
+        return this.alpha < 0;
+      }
+    }
+
+    function mouseMoved() {
+      if (!gameOver) {
+        ship.move(mouseX, mouseY);
+      }
+    }
+
+    function touchMoved() {
+      if (!gameOver && touches.length > 0) {
+        let touch = touches[0];
+        ship.move(touch.x, touch.y);
+      }
+      return false;
+    }
+    </script>
+</body>
+</html>
